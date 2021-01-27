@@ -5,6 +5,8 @@ VisualStudioVersion = 16.0.30804.86
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "DAMI-DBSCAN", "DAMI-DBSCAN\DAMI-DBSCAN.vcxproj", "{470F385C-37E7-4272-AA6E-9D7D8F62A68A}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "TI-DBScan", "TI-DBScan\TI-DBScan.vcxproj", "{A1DFFCD1-D950-47FC-88EF-D9B24641413E}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -21,6 +23,14 @@ Global
 		{470F385C-37E7-4272-AA6E-9D7D8F62A68A}.Release|x64.Build.0 = Release|x64
 		{470F385C-37E7-4272-AA6E-9D7D8F62A68A}.Release|x86.ActiveCfg = Release|Win32
 		{470F385C-37E7-4272-AA6E-9D7D8F62A68A}.Release|x86.Build.0 = Release|Win32
+		{A1DFFCD1-D950-47FC-88EF-D9B24641413E}.Debug|x64.ActiveCfg = Debug|x64
+		{A1DFFCD1-D950-47FC-88EF-D9B24641413E}.Debug|x64.Build.0 = Debug|x64
+		{A1DFFCD1-D950-47FC-88EF-D9B24641413E}.Debug|x86.ActiveCfg = Debug|Win32
+		{A1DFFCD1-D950-47FC-88EF-D9B24641413E}.Debug|x86.Build.0 = Debug|Win32
+		{A1DFFCD1-D950-47FC-88EF-D9B24641413E}.Release|x64.ActiveCfg = Release|x64
+		{A1DFFCD1-D950-47FC-88EF-D9B24641413E}.Release|x64.Build.0 = Release|x64
+		{A1DFFCD1-D950-47FC-88EF-D9B24641413E}.Release|x86.ActiveCfg = Release|Win32
+		{A1DFFCD1-D950-47FC-88EF-D9B24641413E}.Release|x86.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
