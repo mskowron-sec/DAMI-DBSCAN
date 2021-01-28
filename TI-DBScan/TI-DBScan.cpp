@@ -18,6 +18,7 @@ public:
     double x, y;
     int noOfPoints;
     int clusterNo;
+    double distance_to_ref = 0;
     int distances = 0;
     int type = 2;
     double distance = 0; //distance to ref
@@ -37,7 +38,7 @@ public:
     vector<vector<Point> > neighbours;
     vector<vector<int> > cluster;
     vector<int> noise;
-    int ref;
+    Point ref;
 
     TiDbScan(double eps, int minPoints, vector<Point> points) {
         this->eps = eps;
@@ -45,19 +46,19 @@ public:
         this->points = points;
         this->size = (int)points.size();
         neighbours.resize(size);
-        noise.resize(size);
         this->points_sorted=points;//.resize(size);
         this->clusterInx = -1;
+        Point ref = { 0,0,0,0, NOT_CLASSIFIED };
         //  this->corePoints.resize(size);
     }
 
     void run() {
         auto start = chrono::high_resolution_clock::now();
-        //set reference point
-        ref = points[size - 1].index - 1;
+        
+        //ref = points[size - 1].index - 1;
         //find distance of every point to the ref
         for (int i = 0; i < size; i++) {
-            points[i].getDistance(points[ref]);
+            points[i].getDistance(ref);
         }
         //sort points by distance to reference
         std::sort(points_sorted.begin(), points_sorted.end(), [](const Point& lhs, const Point& rhs)
@@ -104,9 +105,7 @@ public:
                  cout << "cluster:" << i << ": "<< cluster[i][j] << endl;
                  }
              }
-         for (size_t j = 0; j < noise.size(); j++) {
-             cout << "cluster noise: " << noise[j] << ": " << noise.size()<<   endl;
-         }*/
+*/
          //writeOut();
        //  printNb();
         }
