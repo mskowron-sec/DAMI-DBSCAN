@@ -35,7 +35,7 @@ public:
     vector<Point> points;
     vector<Point> points_sorted;
     int size;
-    vector<vector<Point> > neighbours;
+    vector<vector<int> > neighbours;
     vector<vector<int> > cluster;
     vector<int> noise;
     Point ref;
@@ -93,22 +93,7 @@ public:
                 noise.push_back(i);
             }
         }
-        //expand the cluster 
-        /*
-        cluster.resize(clusterInx + 1);
-        for (int i = 0; i < size; i++) {
-            if (points[i].clusterNo != NOISE) {
-                // cout << points[i].clusterNo <<"; " <<clusterInx<<endl;
-                cluster[points[i].clusterNo].push_back(i);
-            }
-        }*/
-        /* for (size_t  i = 0; i < cluster.size(); i++) {
 
-             for (size_t  j = 0; j < cluster[i].size(); j++) {
-                 cout << "cluster:" << i << ": "<< cluster[i][j] << endl;
-                 }
-             }
-*/
          //writeOut();
        //  printNb();
         }
@@ -177,7 +162,7 @@ public:
     }
     vector<int> TI_fwdNeighbourhood(int e) {
         std::vector<int>fw;
-            double threshold = eps + points_sorted[ind].distance;
+            double threshold = eps + points_sorted[e].distance;
             for (int i = e + 1; i < points_sorted.size(); i++) {
                 // if q.dist > forwardThreshold then // q.dist � p.dist > Eps?
                 // break;
