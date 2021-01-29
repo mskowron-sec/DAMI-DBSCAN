@@ -58,19 +58,22 @@ public:
         //ref = points[size - 1].index - 1;
         //find distance of every point to the ref
         for (int i = 0; i < size; i++) {
-            points[i].getDistance(ref);
+            points[i].distance=points[i].getDistance(ref);
         }
+        auto end = chrono::high_resolution_clock::now();
+        double ref_time =
+            chrono::duration_cast<chrono::microseconds>(end - start).count();
         //sort points by distance to reference
+         start = chrono::high_resolution_clock::now();
         std::sort(points_sorted.begin(), points_sorted.end(), [](const Point& lhs, const Point& rhs)
             {
                 return lhs.distance < rhs.distance;
             });
         //findNeighbours();
-        auto end = chrono::high_resolution_clock::now();
-        double time_taken =
-            chrono::duration_cast<chrono::nanoseconds>(end - start).count();
+         end = chrono::high_resolution_clock::now();
+        double sort_time =
+            chrono::duration_cast<chrono::microseconds>(end - start).count();
 
-        time_taken *= 1e-9;
         //cout << time_taken;
         for (int i = 0; i < size; i++) {
             if (points[i].clusterNo != NOT_CLASSIFIED) continue;
@@ -132,49 +135,50 @@ public:
     }
 
     void TI_formCluster(int now, int clust) {
-        vector<Point> neighbours = TI_findNeighbours(now);
-       /* if (neighbours.size() < MinPts) {
-            points[i].clusterNo = NOISE;
-            return false;
+        vector<int> neighbours = TI_findNeighbours(now);
+        for (int i = 0; i < size; i++) {
+            if (points[i].clusterNo != NOT_CLASSIFIED) continue;
+            if (isCore(i)) {
+                // points[i].type = 1;
+                TI_formCluster(i, ++clusterInx);
+                // corePoints.push_back(i);
+            }
+            /*if (isBorder(i)) {
+                points[i].type = 0;}
+            */
+            //noise
+            else {
+                points[i].clusterNo = NOISE;
+                points[i].type = -1;
+                //noise.push_back(i);
+            }
         }
-        }*/
-          points[now].clusterNo = clust;
-          if (!isCore(now))
-          {
-              if (isBorder(now)) { points[now].type = 0; }
-              return;
-          }
-
-          for (auto& next : neighbours[now]) {
-              if (points[next].clusterNo != NOT_CLASSIFIED && points[next].clusterNo != NOISE) continue;
-              TI_formCluster(next, clust);
-          }
     }
     //find neighbourhood
     vector<int> TI_findNeighbours(int e) {
-        vector<Point> fwdNeighbourhood = TI_fwdNeighbourhood(e);
-        vector<Point> neighbourhood = TI_bwNeighbourhood(e);
+        //find element in the sorted table
+        auto it = find_if(points_sorted.begin(), points_sorted.end(), [&e](const Point& obj) {return obj.index == e; });
+        int ind;
+        if (it != points_sorted.end())
+        {
+            // found element. it is an iterator to the first matching element.
+            // if you really need the index, you can also get it:
+            ind = std::distance(points_sorted.begin(), it);
+        }
+        vector<int> fwdNeighbourhood = TI_fwdNeighbourhood(ind);
+        vector<int> neighbourhood = TI_bwNeighbourhood(ind);
         neighbourhood.insert(neighbourhood.end(), fwdNeighbourhood.begin(), fwdNeighbourhood.end());
-        vector<int>neighbourhood_int;
+       /* vector<int>neighbourhood_int;
         neighbourhood_int.resize(neighbourhood.size());
         for (size_t i = 0; i < neighbourhood.size();i++) {
             neighbourhood_int[(int)i].push_back(neighbourhood[i].index);
-        }
-        return  neighbourhood_int;
+        }*/
+        return  neighbourhood;
     }
-    vector<Point> TI_fwdNeighbourhood(int e) {
-        std::vector<Point>fw;
-        //find index of element in the sorted data
-        auto it = find_if(points_sorted.begin(), points_sorted.end(), [&e](const Point& obj) {return obj.index == e; });
-        int ind;
-           if (it != points_sorted.end())
-           {
-                // found element. it is an iterator to the first matching element.
-                // if you really need the index, you can also get it:
-                 ind = std::distance(points_sorted.begin(), it);
-           }
+    vector<int> TI_fwdNeighbourhood(int e) {
+        std::vector<int>fw;
             double threshold = eps + points_sorted[ind].distance;
-            for (int i = ind + 1; i < points_sorted.size(); i++) {
+            for (int i = e + 1; i < points_sorted.size(); i++) {
                 // if q.dist > forwardThreshold then // q.dist � p.dist > Eps?
                 // break;
                 // endif
@@ -184,14 +188,14 @@ public:
                 // if Distance2(q, p) <= Eps then
                 // append q to seeds;
                 // endif
-                if (points_sorted[ind].getDistance(points_sorted[i]) <= (eps)) {
-                    fw.push_back(points_sorted[i]);
+                if (points_sorted[e].getDistance(points_sorted[i]) <= (eps)) {
+                    fw.push_back(points_sorted[i].index);
                 }
             }
             return fw;
     }
-    vector<Point> TI_bwNeighbourhood(int e) {
-        vector<Point>bw;
+    vector<int> TI_bwNeighbourhood(int e) {
+        vector<int>bw;
         //find index of element in the sorted data
         auto it = find_if(points_sorted.begin(), points_sorted.end(), [&e](const Point& obj) {return obj.index == e; });
         int ind;
@@ -201,19 +205,19 @@ public:
             // if you really need the index, you can also get it:
             ind = std::distance(points_sorted.begin(), it);
         }
-        double threshold = eps - points_sorted[ind].distance;
-        for (int i = ind - 1; i >=0; i--) {
+        double threshold = eps - points_sorted[e].distance;
+        for (int i = e - 1; i >=0; i--) {
             // if q.dist > forwardThreshold then 
             // break;
             // endif
             if (points_sorted[i].distance < threshold) {
                 break;
             }
-            // if Distance2(q, p) <= Eps then
+            // if Distance2(q, p) <= Eps then 
             // append q to seeds;
             // endif
-            if (points_sorted[ind].getDistance(points_sorted[i]) <= (eps)) {
-                bw.push_back(points_sorted[i]);
+            if (points_sorted[e].getDistance(points_sorted[i]) <= (eps)) {
+                bw.push_back(points_sorted[i].index);
             }
         }
         return bw;
@@ -224,8 +228,8 @@ public:
         return points[index].noOfPoints >= minPoints;
     }
     bool isBorder(int ind) {
-        for (size_t i = 1; i < neighbours[ind].size(); i++) {
-            if (isCore(neighbours[ind][i])) {
+        for (size_t i = 1; i < neighbours[(int)ind].size(); i++) {
+            if (isCore(neighbours[(int)ind][(int)i])) {
                 return true;
             }
         }
