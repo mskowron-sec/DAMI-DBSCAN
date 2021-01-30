@@ -22,9 +22,11 @@ public:
     int distances = 0;
     int type = 2;
     double distance = 0; //distance to ref
-    double getDistance(const Point& point) {
+    double getDistance( Point& point) {
         double distance = sqrt((x - point.x) * (x - point.x) + (y - point.y) * (y - point.y));
-        //cout << "distance " << distance << endl;
+        this->distances++;
+        point.distances++;
+       // cout << "distance " << distance << endl;
         return distance;
     }
 };
@@ -37,7 +39,6 @@ public:
     int size;
     vector<vector<int> > neighbours;
     vector<vector<int> > cluster;
-    vector<int> noise;
     Point ref;
 
     TiDbScan(double eps, int minPoints, vector<Point> points) {
@@ -58,7 +59,7 @@ public:
         //ref = points[size - 1].index - 1;
         //find distance of every point to the ref
         for (int i = 0; i < size; i++) {
-            points[i].distance=points[i].getDistance(ref);
+            points_sorted[i].distance=points[i].getDistance(ref);
         }
         auto end = chrono::high_resolution_clock::now();
         double ref_time =
@@ -73,42 +74,51 @@ public:
          end = chrono::high_resolution_clock::now();
         double sort_time =
             chrono::duration_cast<chrono::microseconds>(end - start).count();
-
+        //find neighbourhood for every point in the dataset
+        for (int i = 0; i < size; i++) {
+            neighbours[i] = TI_findNeighbours(i);
+            points[i].noOfPoints = neighbours[i].size();
+        }
+         
         //cout << time_taken;
         for (int i = 0; i < size; i++) {
-            if (points[i].clusterNo != NOT_CLASSIFIED) continue;
+            if (points[i].clusterNo != NOT_CLASSIFIED) {
+                if (points[i].type != 1 && points[i].type != -2) { points[i].type = 0; }
+                 continue;
+            }
 
             //check if expand cluster
             if (isCore(i)) {
-                TI_formCluster(i, ++clusterInx);
+                points[i].type = 1;
+                clusterInx++;
+                TI_formCluster(i, clusterInx);
                 // corePoints.push_back(i);
             }
             /*if (isBorder(i)) {
-                points[i].type = 0;}
+                }
 
             //noise*/
             else {
                 points[i].clusterNo = NOISE;
                 points[i].type = -1;
-                noise.push_back(i);
             }
         }
 
-         //writeOut();
-       //  printNb();
+         writeOutput();
+         printNb();
         }
     
     //output results to file
-    void writeOut() {
-        ofstream outputfile("OUT-TI");
-        outputfile << "index," << "x," << "y," << "type," << "distances," << "cluster" << endl;
-        for (size_t i = 0; i < cluster.size(); i++) {
-            for (size_t j = 0; j < cluster[i].size(); j++) {
-                int pId = cluster[i][j];
-                outputfile << pId << "," << points[pId].x << "," << points[pId].y << "," << points[pId].type << "," << points[pId].distances << "," << i << endl;
-            }
-        }
+    void writeOutput() {
+        ofstream outputf("OUT");
+        ofstream stats("STAT");
+        outputf << "index," << "x," << "y," << "type," << "distances," << "cluster" << endl;
+        for (int pId = 0; pId < size; pId++) {
+            cout << points[pId].distance << endl;
+            outputf << points[pId].index << "," << points[pId].x << "," << points[pId].y << "," << points[pId].type << "," << points[pId].distances << "," << points[pId].clusterNo << endl;
 
+        }
+      //  stats << "eps=" << eps << endl << "minPoints=" << minPoints << endl << "pointsNo=" << size << endl << "clusters=" << cluster.size() << endl << "FindNeighbours time in microsec = " << time_neighb << endl << "Time Overall in microsec= " << time_all << endl;;
     }
     void printN() {
         ofstream output("OUT-big");
@@ -118,38 +128,45 @@ public:
 
         }
     }
-
-    void TI_formCluster(int now, int clust) {
-        vector<int> neighbours = TI_findNeighbours(now);
+    void printNb() {
+        ofstream output("neighbours");
         for (int i = 0; i < size; i++) {
-            if (points[i].clusterNo != NOT_CLASSIFIED) continue;
-            if (isCore(i)) {
-                // points[i].type = 1;
-                TI_formCluster(i, ++clusterInx);
-                // corePoints.push_back(i);
+            output << i << endl;
+            for (size_t j = 0; j < neighbours[i].size(); j++) {
+                //int pId = cluster[i][j];
+                output << neighbours[i][j] << ",";// << points[pId].y << "," << points[pId].type << "," << points[pId].distances << "," << i << endl;
             }
-            /*if (isBorder(i)) {
-                points[i].type = 0;}
-            */
-            //noise
-            else {
-                points[i].clusterNo = NOISE;
-                points[i].type = -1;
-                //noise.push_back(i);
-            }
+            output << endl;
+        }
+    }
+    void TI_formCluster(int now, int c) {
+        points[now].clusterNo = c;
+        if (!isCore(now))
+        {
+           if (points[now].type != 1 && points[now].type != -2) { points[now].type = 0; }
+            return;
+        }
+        else { points[now].type = 1; }
+
+        for (int i = 0; i < (int)neighbours[now].size(); i++) {
+            int next = neighbours[now][i];
+            if (points[next].clusterNo != NOT_CLASSIFIED && points[next].clusterNo != NOISE) {   continue; }
+            TI_formCluster(next, c);
         }
     }
     //find neighbourhood
     vector<int> TI_findNeighbours(int e) {
+        int ind = 0;
         //find element in the sorted table
         auto it = find_if(points_sorted.begin(), points_sorted.end(), [&e](const Point& obj) {return obj.index == e; });
-        int ind;
+
         if (it != points_sorted.end())
         {
             // found element. it is an iterator to the first matching element.
             // if you really need the index, you can also get it:
             ind = std::distance(points_sorted.begin(), it);
         }
+        cout << ind << endl;
         vector<int> fwdNeighbourhood = TI_fwdNeighbourhood(ind);
         vector<int> neighbourhood = TI_bwNeighbourhood(ind);
         neighbourhood.insert(neighbourhood.end(), fwdNeighbourhood.begin(), fwdNeighbourhood.end());
@@ -269,7 +286,7 @@ int main()
 {
     std::string path = "file";
     InputReader input = InputReader(path);
-    TiDbScan alg = TiDbScan(3, 1, input.getPoints());
+    TiDbScan alg = TiDbScan(2, 3, input.getPoints());
     alg.run();
 }
 
