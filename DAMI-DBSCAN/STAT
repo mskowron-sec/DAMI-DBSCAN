@@ -1,6 +1,6 @@
-eps=18
-minPoints=6
-pointsNo=2552
-clusters=6
-FindNeighbours time in microsec = 763060
-Time Overall in microsec= 772456
+eps=2
+minPoints=3
+pointsNo=12
+clusters=2
+FindNeighbours time in microsec = 62
+Time Overall in microsec= 70

@@ -1,0 +1,8 @@
+eps=2
+minPoints=3
+pointsNo=12
+clusters=2
+Time of distance calc: : 8
+Time of sorting: 4
+FindNeighbours time in microsec = 1598
+Time of classification: 6

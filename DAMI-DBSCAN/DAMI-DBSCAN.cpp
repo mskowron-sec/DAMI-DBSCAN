@@ -48,17 +48,17 @@ public:
         auto nstart = chrono::high_resolution_clock::now();
         findNeighbours();
         auto nend = chrono::high_resolution_clock::now();
-        auto time_neighb = chrono::duration_cast<chrono::microseconds>(nend - nstart).count();
+        auto time_neighb = chrono::duration_cast<chrono::microseconds>(nend - nstart).count();;
        for (int i = 0; i < size; i++) {
             if (points[i].clusterNo != NOT_CLASSIFIED) continue;
             if (isCore(i)) {
-               // points[i].type = 1;
+                points[i].type = 1;
                 formCluster(i, ++clusterInx);
                // corePoints.push_back(i);
             }
-            /*if (isBorder(i)) {
-                points[i].type = 0;}
-            */
+          //  if (isBorder(i)) {
+            //    points[i].type = 0;}
+            
             //noise
             else {
                 points[i].clusterNo = NOISE;
@@ -69,22 +69,14 @@ public:
        auto aend= chrono::high_resolution_clock::now();
        auto time_all = chrono::duration_cast<chrono::microseconds>(aend - nstart).count();
         //cluster structures
-        cluster.resize(clusterInx + 1);
+        /*cluster.resize(clusterInx + 1);
         for (int i = 0; i < size; i++) {
             if (points[i].clusterNo != NOISE) {
                // cout << points[i].clusterNo <<"; " <<clusterInx<<endl;
                 cluster[points[i].clusterNo].push_back(i);
             }
-        }
-       /* for (size_t  i = 0; i < cluster.size(); i++) {
-
-            for (size_t  j = 0; j < cluster[i].size(); j++) {
-                cout << "cluster:" << i << ": "<< cluster[i][j] << endl;
-                }
-            }
-        for (size_t j = 0; j < noise.size(); j++) {
-            cout << "cluster noise: " << noise[j] << ": " << noise.size()<<   endl;
         }*/
+
         writeOutput(time_neighb, time_all);
  
         printNb();
@@ -111,7 +103,7 @@ public:
                 outputf << points[pId].index << "," << points[pId].x << "," << points[pId].y << "," << points[pId].type << "," << points[pId].distances << "," << points[pId].clusterNo << endl;
             
         }
-        stats << "eps=" << eps << endl << "minPoints=" << minPoints << endl << "pointsNo=" << size << endl << "clusters=" << cluster.size() << endl << "FindNeighbours time in microsec = " << time_neighb << endl << "Time Overall in microsec= " << time_all << endl;;
+        stats << "eps=" << eps << endl << "minPoints=" << minPoints << endl << "pointsNo=" << size << endl << "clusters=" << clusterInx+1 << endl << "FindNeighbours time in microsec = " << time_neighb << endl << "Time Overall in microsec= " << time_all << endl;;
     }
     void printN() {
         ofstream output("OUT-big");
@@ -141,13 +133,15 @@ public:
             for (int j = 0; j < size; j++) {
                 if (i == j) continue;
                 //if within epsilon radius
-                if (points[i].getDistance(points[j]) <= eps) {
+                double dist = points[i].getDistance(points[j]);
+                points[j].distances++;
+                points[i].distances++;
+                if (dist <= eps) {
                     points[i].noOfPoints++;
                     //push to neighbourhood
                     neighbours[i].push_back(j);
                 }
             }
-            points[i].distances++;
         }
     }
     // check if neighbourhood satisfies the minpoins requirement
@@ -173,7 +167,9 @@ public:
         
         for (int i=0;i<(int)neighbours[now].size();i++) {
             int next = neighbours[now][i];
-            if (points[next].clusterNo != NOT_CLASSIFIED && points[next].clusterNo != NOISE) continue;
+            if (points[next].clusterNo != NOT_CLASSIFIED && points[next].clusterNo != NOISE) {
+                points[now].type = 0;  continue;
+             }
             formCluster(next, c);
         }
     }
@@ -206,7 +202,7 @@ public:
             }*/
             points.push_back({ index,x,y,0, NOT_CLASSIFIED});
         }
-       // points.pop_back();
+        points.pop_back();
          
          
         for (auto i = points.begin(); i != points.end(); i++)
@@ -219,15 +215,25 @@ public:
         return points;
     }
 };
-//Point class - 2D
-//TODO N-Dimensions
+//
 
-int main()
+int main(int argc, char* argv[])
 {
-    std::string path = "complex8";
+    std::string path = argv[1];
     InputReader input = InputReader(path);
-    DbScan alg = DbScan(18, 6, input.getPoints());
-    alg.run(); 
+    
+    double epsilon = atoi(argv[2]);
+   // cout << epsilon << endl;
+
+    int minp = atoi(argv[3]);
+    //cout <<"minpts:"<< minp << endl;
+    DbScan alg = DbScan(epsilon, minp, input.getPoints());
+    alg.run();
+    /*std::string path = "file";
+    InputReader input = InputReader(path);
+
+    DbScan alg = DbScan(2, 3, input.getPoints());
+    alg.run();*/
 }
 
 // Uruchomienie programu: Ctrl + F5 lub menu Debugowanie > Uruchom bez debugowania

@@ -7,7 +7,7 @@
 #include <chrono> 
 #include <utility>
 #include <algorithm>
-//TODO: 1. make it work!2. correct border-core assignment 3.merge with DBSCAN
+//TODO: 2. correct border-core assignment 3.merge with DBSCAN
 using namespace std;
 int status;
 const int NOT_CLASSIFIED = -1;
@@ -59,7 +59,8 @@ public:
         //ref = points[size - 1].index - 1;
         //find distance of every point to the ref
         for (int i = 0; i < size; i++) {
-            points_sorted[i].distance=points[i].getDistance(ref);
+            points_sorted[i].distance = points[i].getDistance(ref);
+            points_sorted[i].distances++;
         }
         auto end = chrono::high_resolution_clock::now();
         double ref_time =
@@ -75,18 +76,21 @@ public:
         double sort_time =
             chrono::duration_cast<chrono::microseconds>(end - start).count();
         //find neighbourhood for every point in the dataset
+        start = chrono::high_resolution_clock::now();
         for (int i = 0; i < size; i++) {
             neighbours[i] = TI_findNeighbours(i);
             points[i].noOfPoints = neighbours[i].size();
         }
-         
+        end = chrono::high_resolution_clock::now();
+        double findneighbours_time =chrono::duration_cast<chrono::microseconds>(end - start).count();
         //cout << time_taken;
+        start = chrono::high_resolution_clock::now();
         for (int i = 0; i < size; i++) {
             if (points[i].clusterNo != NOT_CLASSIFIED) {
                 if (points[i].type != 1 && points[i].type != -2) { points[i].type = 0; }
                  continue;
             }
-
+        
             //check if expand cluster
             if (isCore(i)) {
                 points[i].type = 1;
@@ -103,22 +107,28 @@ public:
                 points[i].type = -1;
             }
         }
-
-         writeOutput();
-         printNb();
+        end = chrono::high_resolution_clock::now();
+        double classification_time = chrono::duration_cast<chrono::microseconds>(end - start).count();
+        start  = chrono::high_resolution_clock::now();
+        //ref_time, sort_time,findneighbours_time, classification_time
+        writeOutput();
+        end = chrono::high_resolution_clock::now();
+        double write_time = chrono::duration_cast<chrono::microseconds>(end - start).count();
+        cout << write_time << endl;
+        printNb();
         }
-    
+    //double reft, double sort, double neig, double clas
     //output results to file
     void writeOutput() {
-        ofstream outputf("OUT");
-        ofstream stats("STAT");
-        outputf << "index," << "x," << "y," << "type," << "distances," << "cluster" << endl;
+        ofstream outputfti("TI-OUT");
+       // ofstream statsti("TI-STAT");
+        outputfti << "index," << "x," << "y," << "type," << "distances," << "cluster" << endl;
         for (int pId = 0; pId < size; pId++) {
             cout << points[pId].distance << endl;
-            outputf << points[pId].index << "," << points[pId].x << "," << points[pId].y << "," << points[pId].type << "," << points[pId].distances << "," << points[pId].clusterNo << endl;
+            outputfti << points[pId].index << "," << points[pId].x << "," << points[pId].y << "," << points[pId].type << "," << points[pId].distances << "," << points[pId].clusterNo << endl;
 
         }
-      //  stats << "eps=" << eps << endl << "minPoints=" << minPoints << endl << "pointsNo=" << size << endl << "clusters=" << cluster.size() << endl << "FindNeighbours time in microsec = " << time_neighb << endl << "Time Overall in microsec= " << time_all << endl;;
+        //statsti << "eps=" << eps << endl << "minPoints=" << minPoints << endl << "pointsNo=" << size << endl << "clusters=" << clusterInx+1 << endl << "Time of distance calc: : " << reft << endl<< "Time of sorting: " << sort << endl<< "FindNeighbours time in microsec = " << neig << endl << "Time of classification: " << clas << endl;
     }
     void printN() {
         ofstream output("OUT-big");
@@ -167,8 +177,8 @@ public:
             ind = std::distance(points_sorted.begin(), it);
         }
         cout << ind << endl;
-        vector<int> fwdNeighbourhood = TI_fwdNeighbourhood(ind);
-        vector<int> neighbourhood = TI_bwNeighbourhood(ind);
+        vector<int> fwdNeighbourhood = TI_fwdNeighbourhood(ind,e);
+        vector<int> neighbourhood = TI_bwNeighbourhood(ind,e);
         neighbourhood.insert(neighbourhood.end(), fwdNeighbourhood.begin(), fwdNeighbourhood.end());
        /* vector<int>neighbourhood_int;
         neighbourhood_int.resize(neighbourhood.size());
@@ -177,7 +187,7 @@ public:
         }*/
         return  neighbourhood;
     }
-    vector<int> TI_fwdNeighbourhood(int e) {
+    vector<int> TI_fwdNeighbourhood(int e,int old) {
         std::vector<int>fw;
             double threshold = eps + points_sorted[e].distance;
             for (int i = e + 1; i < points_sorted.size(); i++) {
@@ -190,13 +200,16 @@ public:
                 // if Distance2(q, p) <= Eps then
                 // append q to seeds;
                 // endif
-                if (points_sorted[e].getDistance(points_sorted[i]) <= (eps)) {
+                double dist = points_sorted[e].getDistance(points_sorted[i]);
+                points_sorted[i].distances++;
+                points_sorted[e].distances++;
+                if (dist <= (eps)) {
                     fw.push_back(points_sorted[i].index);
                 }
             }
             return fw;
     }
-    vector<int> TI_bwNeighbourhood(int e) {
+    vector<int> TI_bwNeighbourhood(int e,int old) {
         vector<int>bw;
         //find index of element in the sorted data
         auto it = find_if(points_sorted.begin(), points_sorted.end(), [&e](const Point& obj) {return obj.index == e; });
@@ -218,6 +231,8 @@ public:
             // if Distance2(q, p) <= Eps then 
             // append q to seeds;
             // endif
+            points_sorted[i].distances++;
+            points[old].distances++;
             if (points_sorted[e].getDistance(points_sorted[i]) <= (eps)) {
                 bw.push_back(points_sorted[i].index);
             }
@@ -282,12 +297,22 @@ public:
 //Point class - 2D
 //TODO N-Dimensions
 
-int main()
+int main(int argc, char* argv[])
 {
-    std::string path = "file";
+    
+    std::string path = argv[1];
     InputReader input = InputReader(path);
+
+    double epsilon = atoi(argv[2]);
+     int minp = atoi(argv[3]);
+    TiDbScan alg = TiDbScan(epsilon, minp, input.getPoints());
+   /*
+     std::string path = "file"; 
+    InputReader input = InputReader(path);
+    
     TiDbScan alg = TiDbScan(2, 3, input.getPoints());
     alg.run();
+    */
 }
 
 // Uruchomienie programu: Ctrl + F5 lub menu Debugowanie > Uruchom bez debugowania
