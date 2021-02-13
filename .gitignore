@@ -338,3 +338,8 @@ ASALocalRun/
 
 # BeatPulse healthcheck temp database
 healthchecksdb
+/reference neighbors simple.txt
+/TI-DBScan-v2
+/files
+/inputread-test
+/TI-DBSCAN-v3

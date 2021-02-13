@@ -5,24 +5,50 @@
 #include <vector>
 #include <fstream>
 #include <chrono> 
-//TODO: cmd arguments, more dimensions for points, calc number and core-border corrections 
+#include <sstream>
+#include <cmath>
+#include <assert.h>
+
 using namespace std;
 //int status;
-const int NOT_CLASSIFIED = -1;
-const int NOISE = -2;
+const int NOT_CLASSIFIED = -2;
+const int NOISE = -1;
 class Point {
 public:
     int index;
-    double x, y;
-    int noOfPoints;
+    vector<double>coordinates;
+    // double x, y;
+    int noOfNeighbours;
     int clusterNo;
-    int distances =0;
+    int label;
+    int noDistances = 0;
     int type = 0;
-    double getDistance(const Point& point) {
-        double distance=  sqrt((x - point.x) * (x - point.x) + (y - point.y) * (y - point.y));
+    double getEuclDistance2D(Point& point,int dim) {
+        point.noDistances++;
+        this->noDistances++;
+        double distance = sqrt(pow(this->coordinates[0] - point.coordinates[0], 2) + pow(this->coordinates[1] - point.coordinates[1], 2));
         //cout << "distance " << distance << endl;
         return distance;
     }
+    /// <summary>
+    /// function to calculate Minkowski distance for N-dimensional vector, l-order
+    /// </summary>
+    /// <param name="point"></param>
+    /// <param name="dim"></param>
+    /// <param name="l"></param>
+    /// <returns>distance</returns>
+    double getDistanceN(Point& point, int dim, double l = 2.0) {
+
+        double dim_sum = 0;
+        for (int i = 0; i < dim; i++) {
+            dim_sum += pow(coordinates[i] - point.coordinates[i], l);
+        }
+        double power = 1.0 / l;
+        // cout << power << endl;
+        double distance = pow(dim_sum, power);
+        // cout << "distance " << distance << endl;
+        return distance;
+    };
 };
 class DbScan {
 public:
@@ -31,8 +57,8 @@ public:
     vector<Point> points;
     int size;
     vector<vector<int> > neighbours;
-    vector<vector<int> > cluster;
-    vector<int> noise;
+    int dimensions;
+
 
     DbScan(double eps, int minPoints, vector<Point> points) {    
         this->eps = eps;
@@ -40,115 +66,129 @@ public:
         this->points = points;
         this->size = (int)points.size();
         neighbours.resize(size);
-        noise.resize(size);
         this->clusterInx = -1;
-      //  this->corePoints.resize(size);
+        this->dimensions = points[0].coordinates.size();
     }
     void run() {
         auto nstart = chrono::high_resolution_clock::now();
         findNeighbours();
         auto nend = chrono::high_resolution_clock::now();
-        auto time_neighb = chrono::duration_cast<chrono::microseconds>(nend - nstart).count();;
+        auto time_neighb = chrono::duration_cast<chrono::microseconds>(nend - nstart).count();
+        cout <<"Find neighbours time: "<< time_neighb << endl;
+        auto cl= chrono::high_resolution_clock::now();
        for (int i = 0; i < size; i++) {
+
             if (points[i].clusterNo != NOT_CLASSIFIED) continue;
             if (isCore(i)) {
                 points[i].type = 1;
                 formCluster(i, ++clusterInx);
-               // corePoints.push_back(i);
+              
             }
-          //  if (isBorder(i)) {
-            //    points[i].type = 0;}
-            
+
             //noise
             else {
                 points[i].clusterNo = NOISE;
                 points[i].type = -1;
-                noise.push_back(i);
             }
         }
        auto aend= chrono::high_resolution_clock::now();
+       auto time_class = chrono::duration_cast<chrono::microseconds>(aend - cl).count();
+       cout << "Clustering time: " << time_class << endl;
        auto time_all = chrono::duration_cast<chrono::microseconds>(aend - nstart).count();
-        //cluster structures
-        /*cluster.resize(clusterInx + 1);
-        for (int i = 0; i < size; i++) {
-            if (points[i].clusterNo != NOISE) {
-               // cout << points[i].clusterNo <<"; " <<clusterInx<<endl;
-                cluster[points[i].clusterNo].push_back(i);
-            }
-        }*/
 
-        writeOutput(time_neighb, time_all);
- 
-        printNb();
+       auto wstart = chrono::high_resolution_clock::now();
+        writeOutput(time_neighb,time_class, time_all);
+        auto all = chrono::high_resolution_clock::now();
+        auto time_write = chrono::duration_cast<chrono::microseconds>(all - wstart).count();
+        auto time_all_w = chrono::duration_cast<chrono::microseconds>(all - nstart).count();
+        cout << "Time of  writing: " << time_write << " microsecond" << endl;
+        cout <<"Time of run() with writing: "<< time_all_w<<" microsecond"<<endl;
+       
+        //printNb();
 
     }
     //output results to file
-    void writeOutClusters() {
-        ofstream outputfile("OUT2");
-       // ofstream stats("STAT");
-        outputfile <<"index,"<<"x,"<<"y,"<<"type,"<<"distances,"<<"cluster"  <<endl ;
-        for (size_t i = 0; i < cluster.size(); i++) {
-            for (size_t j = 0; j < cluster[i].size(); j++) {
-                int pId = cluster[i][j];
-                outputfile << pId << "," <<points[pId].x <<","<< points[pId].y << ","<< points[pId].type << ","<< points[pId].distances <<"," << i << endl;
-            }
-        }
-    }
-    void writeOutput(long time_neighb, long  time_all) {
+    void writeOutput(long time_neighb, long clas, long  time_all) {
+        //variable to store sum of distance calculations
+        double dist_sum = 0;
+        //average of distance calc per point
+        double dist_avg = 0;
+        int rand_idx = 0;
         ofstream outputf("OUT");
         ofstream stats("STAT");
-        outputf << "index," << "x," << "y," << "type," << "distances," << "cluster" << endl;
+        outputf << "index," << "coordinates," << "type," << "distances," << "cluster" << endl;
         for (int pId = 0; pId < size; pId++) {
-            
-                outputf << points[pId].index << "," << points[pId].x << "," << points[pId].y << "," << points[pId].type << "," << points[pId].distances << "," << points[pId].clusterNo << endl;
+            dist_sum += points[pId].noDistances;
+            if (points[pId].clusterNo == points[pId].label)
+            {
+                ++rand_idx;
+            }
+            outputf << points[pId].index << ",";
+            for (int j = 0; j < dimensions; j++) {
+                outputf << points[pId].coordinates[j]  << ",";
+            }
+            outputf<< points[pId].type << "," << points[pId].noDistances << "," << points[pId].clusterNo << endl;
             
         }
-        stats << "eps=" << eps << endl << "minPoints=" << minPoints << endl << "pointsNo=" << size << endl << "clusters=" << clusterInx+1 << endl << "FindNeighbours time in microsec = " << time_neighb << endl << "Time Overall in microsec= " << time_all << endl;;
+        double rand_index = rand_idx / (double)size;
+        dist_avg = dist_sum / size;
+        stats << "eps=" << eps << endl << "minPoints=" << minPoints << endl << "pointsNo=" << size << endl << "dimensions=" << dimensions << endl << "clusters=" << clusterInx+1 << endl << "FindNeighbours time in microsec = " << time_neighb << endl<<"clustering time= "<<clas <<endl<< "Time Overall of run() in microsec= " << time_all<<endl<<"Distance calc per point="<<dist_avg << endl<<"Rand index="<<rand_index<<endl;
+        cout << "eps=" << eps << ' ' << "minPts=" << minPoints <<' '<< "clusters=" << clusterInx + 1 << endl;
     }
-    void printN() {
-        ofstream output("OUT-big");
-        for (int i = 0; i < size; i++) {
-
-                output << points[i].index << "," << points[i].clusterNo <<  "," << points[i].x << "," << points[i].y << endl;
-            
-        }
-    }
+    //debug function to verify correct neighbour assignment
     void printNb() {
         ofstream output("neighbours");
         for (int i = 0; i < size; i++) {
             output << i << endl;
             for (size_t j = 0; j < neighbours[i].size(); j++) {
-                //int pId = cluster[i][j];
-                output  << neighbours[i][j] << ",";// << points[pId].y << "," << points[pId].type << "," << points[pId].distances << "," << i << endl;
+
+                output  << neighbours[i][j] << ",";
             }
             output << endl;
         }
     }
-    //find neighbourhood
+    //find neighbourhood for all points
     void findNeighbours() {
         
         for (int i = 0; i < size; i++) {
-           // neighbours[i].push_back(i);
-           // points[i].noOfPoints++;
-            for (int j = 0; j < size; j++) {
-                if (i == j) continue;
+
+            for (int j = i+1; j < size; j++) {
                 //if within epsilon radius
-                double dist = points[i].getDistance(points[j]);
-                points[j].distances++;
-                points[i].distances++;
+                double dist = points[i].getDistanceN(points[j], dimensions);
+                
+                points[j].noDistances++;
+                points[i].noDistances++;
                 if (dist <= eps) {
-                    points[i].noOfPoints++;
+                    points[i].noOfNeighbours++;
                     //push to neighbourhood
                     neighbours[i].push_back(j);
+
+                    // increment neighbour count
+                    points[j].noOfNeighbours++;
+                    neighbours[j].push_back(i);
                 }
             }
-        }
+
+            // add self
+            points[i].noOfNeighbours++;
+            assert(points[i].noOfNeighbours == neighbours[i].size() + 1);
+            
+            points[i].noOfNeighbours = neighbours[i].size() + 1;
+
+
+         }
     }
-    // check if neighbourhood satisfies the minpoins requirement
+    ///  check if neighbourhood satisfies the minpoins requirement
     bool isCore(int index) {
-        
-        return points[index].noOfPoints >= minPoints;
+        if (points[index].noOfNeighbours >= minPoints) {
+            return true;
+        }
+        else { return false; }
     }
+    /// <summary>
+    /// check if is a border point
+    /// </summary>
+    /// <param name="filename"></param>
     bool isBorder(int ind) {
         for (size_t i = 1; i < neighbours[ind].size(); i++) {
             if (isCore(neighbours[ind][i])) {
@@ -156,7 +196,9 @@ public:
             }
         }
     }
+    //clustering function assigning points to cluster -  will be updated to iterative in the next revision
     void formCluster(int now, int c) {
+
         points[now].clusterNo = c;
         if (!isCore(now)) 
         {
@@ -168,14 +210,12 @@ public:
         for (int i=0;i<(int)neighbours[now].size();i++) {
             int next = neighbours[now][i];
             if (points[next].clusterNo != NOT_CLASSIFIED && points[next].clusterNo != NOISE) {
-                points[now].type = 0;  continue;
+                  continue;
              }
             formCluster(next, c);
         }
     }
-    vector<vector<int> > getCluster() {
-        return cluster;
-    }
+
 };
 class InputReader {
 private:
@@ -185,32 +225,41 @@ public:
     InputReader(string filename) {
         fin.open(filename.c_str());
         if (!fin) {
-              cout << filename << " could not be read - file not found!\n";
-             exit(0);
+            cout << filename << " could not be read - file not found!\n";
+            exit(0);
         }
-        parse(); 
+        parse();
     }
     void parse() {
-        int index;
+        int index = 0;
+        int label;
         double x, y;
-        string element;
-        while (!fin.eof()) {
-            fin >>index >> x >> y;
-           /* while (getline(fin, element, ','))
-            {
-               
-            }*/
-            points.push_back({ index,x,y,0, NOT_CLASSIFIED});
-        }
-        points.pop_back();
-         
-         
-        for (auto i = points.begin(); i != points.end(); i++)
-        {
-            cout << i->x<<' '<< i->y <<' ' <<i->index << endl;
+        string coordinates;
 
+        while (!fin.eof()) {
+            fin >> label >> coordinates;
+            ///vector to store coordinates
+            vector<double> elements;
+            std::stringstream ss(coordinates);
+            while (ss.good())
+            {
+
+                string substr;
+                getline(ss, substr, ',');
+               
+                elements.push_back(atof(substr.c_str()));
+            }
+            points.push_back({ index,elements, 0, NOT_CLASSIFIED,label });
+            index++;
         }
+
     }
+    /// <summary>
+    /// getter for input point list
+    /// </summary>
+    /// <param name="argc"></param>
+    /// <param name="argv"></param>
+    /// <returns> vector<Point >points</returns>
     vector<Point> getPoints() {
         return points;
     }
@@ -219,30 +268,27 @@ public:
 
 int main(int argc, char* argv[])
 {
+   
+    auto tstart = chrono::high_resolution_clock::now();
+    //std::string path = "cluto-t7-10k";
     std::string path = argv[1];
     InputReader input = InputReader(path);
-    
-    double epsilon = atoi(argv[2]);
-   // cout << epsilon << endl;
-
+    double epsilon = atof(argv[2]);
     int minp = atoi(argv[3]);
-    //cout <<"minpts:"<< minp << endl;
+    auto wend = chrono::high_resolution_clock::now();
+    auto read_time = chrono::duration_cast<chrono::microseconds>(wend - tstart).count();
+    cout << "Read time: " << read_time << " microseconds" << endl;
     DbScan alg = DbScan(epsilon, minp, input.getPoints());
+    auto rstart = chrono::high_resolution_clock::now();
     alg.run();
-    /*std::string path = "file";
-    InputReader input = InputReader(path);
+    auto rend = chrono::high_resolution_clock::now();
+    auto run_time = chrono::duration_cast<chrono::microseconds>(rend - rstart).count();
+    auto stop = chrono::high_resolution_clock::now();
+    auto time_whole = chrono::duration_cast<chrono::microseconds>(stop - tstart).count();
+    cout << "Run fuction time (in main): " << run_time << " microseconds" << endl;
 
-    DbScan alg = DbScan(2, 3, input.getPoints());
-    alg.run();*/
+    cout << "Total Execution time: " << time_whole;
 }
 
 // Uruchomienie programu: Ctrl + F5 lub menu Debugowanie > Uruchom bez debugowania
 // Debugowanie programu: F5 lub menu Debugowanie > Rozpocznij debugowanie
-
-// Porady dotyczące rozpoczynania pracy:
-//   1. Użyj okna Eksploratora rozwiązań, aby dodać pliki i zarządzać nimi
-//   2. Użyj okna programu Team Explorer, aby nawiązać połączenie z kontrolą źródła
-//   3. Użyj okna Dane wyjściowe, aby sprawdzić dane wyjściowe kompilacji i inne komunikaty
-//   4. Użyj okna Lista błędów, aby zobaczyć błędy
-//   5. Wybierz pozycję Projekt > Dodaj nowy element, aby utworzyć nowe pliki kodu, lub wybierz pozycję Projekt > Dodaj istniejący element, aby dodać istniejące pliku kodu do projektu
-//   6. Aby w przyszłości ponownie otworzyć ten projekt, przejdź do pozycji Plik > Otwórz > Projekt i wybierz plik sln
