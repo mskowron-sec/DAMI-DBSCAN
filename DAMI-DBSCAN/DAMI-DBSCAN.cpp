@@ -23,7 +23,8 @@ public:
     int label;
     int noDistances = 0;
     int type = 0;
-    double getEuclDistance2D(Point& point,int dim) {
+    int visited = 0;
+    double getEuclDistance2D(Point& point, int dim) {
         point.noDistances++;
         this->noDistances++;
         double distance = sqrt(pow(this->coordinates[0] - point.coordinates[0], 2) + pow(this->coordinates[1] - point.coordinates[1], 2));
@@ -60,7 +61,7 @@ public:
     int dimensions;
 
 
-    DbScan(double eps, int minPoints, vector<Point> points) {    
+    DbScan(double eps, int minPoints, vector<Point> points) {
         this->eps = eps;
         this->minPoints = minPoints;
         this->points = points;
@@ -71,39 +72,70 @@ public:
     }
     void run() {
         auto nstart = chrono::high_resolution_clock::now();
+        //find neighbours functions
         findNeighbours();
         auto nend = chrono::high_resolution_clock::now();
         auto time_neighb = chrono::duration_cast<chrono::microseconds>(nend - nstart).count();
-        cout <<"Find neighbours time: "<< time_neighb << endl;
-        auto cl= chrono::high_resolution_clock::now();
-       for (int i = 0; i < size; i++) {
+        cout << "Find neighbours time: " << time_neighb << endl;
+        //printNb();
+        auto cl = chrono::high_resolution_clock::now();
+        //clustering
+        for (int i = 0; i < size; i++) {
 
             if (points[i].clusterNo != NOT_CLASSIFIED) continue;
+
             if (isCore(i)) {
                 points[i].type = 1;
-                formCluster(i, ++clusterInx);
-              
-            }
+                ++clusterInx;
+                points[i].clusterNo = clusterInx;
+                points[i].visited = 1;
+                for (int n = 0; n < neighbours[i].size(); n++) {
+                    points[neighbours[i][n]].visited = 1;
+                }
+                //search among neighbors
+                for (int j = 0; j < neighbours[i].size(); j++) {
+                    int cur_n = neighbours[i][j];
 
+                    if (points[cur_n].clusterNo == NOISE) { points[cur_n].clusterNo = clusterInx; points[cur_n].visited = 1; points[cur_n].type = 0; }
+                    if (points[cur_n].clusterNo != NOT_CLASSIFIED) { continue; }
+                    points[cur_n].clusterNo = clusterInx;
+                    points[cur_n].visited = 1;
+                    if (isCore(cur_n)) {
+                        points[cur_n].type = 1;
+                        for (int k = 0; k < neighbours[cur_n].size(); k++)
+                        {
+                            int cand_idx = neighbours[cur_n][k];
+                            if (points[cand_idx].clusterNo == NOISE) { points[cand_idx].clusterNo = clusterInx; }
+                            if (points[cand_idx].clusterNo == NOT_CLASSIFIED) {
+                                if (points[cand_idx].visited == 0)
+                                {
+                                    neighbours[i].push_back(neighbours[cur_n][k]);
+                                    points[cand_idx].visited = 1;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
             //noise
             else {
                 points[i].clusterNo = NOISE;
                 points[i].type = -1;
             }
         }
-       auto aend= chrono::high_resolution_clock::now();
-       auto time_class = chrono::duration_cast<chrono::microseconds>(aend - cl).count();
-       cout << "Clustering time: " << time_class << endl;
-       auto time_all = chrono::duration_cast<chrono::microseconds>(aend - nstart).count();
+        auto aend = chrono::high_resolution_clock::now();
+        auto time_class = chrono::duration_cast<chrono::microseconds>(aend - cl).count();
+        cout << "Clustering time: " << time_class << endl;
+        auto time_all = chrono::duration_cast<chrono::microseconds>(aend - nstart).count();
 
-       auto wstart = chrono::high_resolution_clock::now();
-        writeOutput(time_neighb,time_class, time_all);
+        auto wstart = chrono::high_resolution_clock::now();
+        writeOutput(time_neighb, time_class, time_all);
         auto all = chrono::high_resolution_clock::now();
         auto time_write = chrono::duration_cast<chrono::microseconds>(all - wstart).count();
         auto time_all_w = chrono::duration_cast<chrono::microseconds>(all - nstart).count();
         cout << "Time of  writing: " << time_write << " microsecond" << endl;
-        cout <<"Time of run() with writing: "<< time_all_w<<" microsecond"<<endl;
-       
+        cout << "Time of run() with writing: " << time_all_w << " microsecond" << endl;
+
         //printNb();
 
     }
@@ -125,15 +157,15 @@ public:
             }
             outputf << points[pId].index << ",";
             for (int j = 0; j < dimensions; j++) {
-                outputf << points[pId].coordinates[j]  << ",";
+                outputf << points[pId].coordinates[j] << ",";
             }
-            outputf<< points[pId].type << "," << points[pId].noDistances << "," << points[pId].clusterNo << endl;
-            
+            outputf << points[pId].type << "," << points[pId].noDistances << "," << points[pId].clusterNo << endl;
+
         }
         double rand_index = rand_idx / (double)size;
         dist_avg = dist_sum / size;
-        stats << "eps=" << eps << endl << "minPoints=" << minPoints << endl << "pointsNo=" << size << endl << "dimensions=" << dimensions << endl << "clusters=" << clusterInx+1 << endl << "FindNeighbours time in microsec = " << time_neighb << endl<<"clustering time= "<<clas <<endl<< "Time Overall of run() in microsec= " << time_all<<endl<<"Distance calc per point="<<dist_avg << endl<<"Rand index="<<rand_index<<endl;
-        cout << "eps=" << eps << ' ' << "minPts=" << minPoints <<' '<< "clusters=" << clusterInx + 1 << endl;
+        stats << "eps=" << eps << endl << "minPoints=" << minPoints << endl << "pointsNo=" << size << endl << "dimensions=" << dimensions << endl << "clusters=" << clusterInx + 1 << endl << "FindNeighbours time in microsec = " << time_neighb << endl << "clustering time= " << clas << endl << "Time Overall of run() in microsec= " << time_all << endl << "Distance calc per point=" << dist_avg << endl << "Rand index=" << rand_index << endl;
+        cout << "eps=" << eps << ' ' << "minPts=" << minPoints << ' ' << "clusters=" << clusterInx + 1 << endl;
     }
     //debug function to verify correct neighbour assignment
     void printNb() {
@@ -142,21 +174,21 @@ public:
             output << i << endl;
             for (size_t j = 0; j < neighbours[i].size(); j++) {
 
-                output  << neighbours[i][j] << ",";
+                output << neighbours[i][j] << ",";
             }
             output << endl;
         }
     }
     //find neighbourhood for all points
     void findNeighbours() {
-        
+
         for (int i = 0; i < size; i++) {
 
-            for (int j = i+1; j < size; j++) {
+            for (int j = i + 1; j < size; j++) {
                 //if within epsilon radius
                 double dist = points[i].getDistanceN(points[j], dimensions);
-                
-                points[j].noDistances++;
+
+                //points[j].noDistances++;
                 points[i].noDistances++;
                 if (dist <= eps) {
                     points[i].noOfNeighbours++;
@@ -172,11 +204,11 @@ public:
             // add self
             points[i].noOfNeighbours++;
             assert(points[i].noOfNeighbours == neighbours[i].size() + 1);
-            
+
             points[i].noOfNeighbours = neighbours[i].size() + 1;
 
 
-         }
+        }
     }
     ///  check if neighbourhood satisfies the minpoins requirement
     bool isCore(int index) {
@@ -196,22 +228,23 @@ public:
             }
         }
     }
-    //clustering function assigning points to cluster -  will be updated to iterative in the next revision
+    //old recursive function to form clsters
     void formCluster(int now, int c) {
 
         points[now].clusterNo = c;
-        if (!isCore(now)) 
+        if (!isCore(now))
         {
             if (isBorder(now)) { points[now].type = 0; }
             return;
         }
-        else{ points[now].type = 1; }
-        
-        for (int i=0;i<(int)neighbours[now].size();i++) {
+        else { points[now].type = 1; }
+
+        for (int i = 0; i < (int)neighbours[now].size(); i++) {
             int next = neighbours[now][i];
-            if (points[next].clusterNo != NOT_CLASSIFIED && points[next].clusterNo != NOISE) {
-                  continue;
-             }
+            //
+            if (points[next].clusterNo != NOT_CLASSIFIED) {
+                continue;
+            }
             formCluster(next, c);
         }
     }
@@ -246,7 +279,7 @@ public:
 
                 string substr;
                 getline(ss, substr, ',');
-               
+
                 elements.push_back(atof(substr.c_str()));
             }
             points.push_back({ index,elements, 0, NOT_CLASSIFIED,label });
@@ -268,9 +301,9 @@ public:
 
 int main(int argc, char* argv[])
 {
-   
+
     auto tstart = chrono::high_resolution_clock::now();
-    //std::string path = "cluto-t7-10k";
+    // std::string path = "simple";
     std::string path = argv[1];
     InputReader input = InputReader(path);
     double epsilon = atof(argv[2]);

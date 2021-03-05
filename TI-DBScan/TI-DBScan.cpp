@@ -26,6 +26,7 @@ public:
     int noDistances = 0;
     int type = 0;
     double distance = 0; //distance to ref
+    int visited = 0;
 
     double getDistanceN(Point& point, int dim, double l = 2.0) {
         double dim_sum = 0;
@@ -91,26 +92,56 @@ public:
 
         //find neighbourhood for every point in the dataset
         start = chrono::high_resolution_clock::now();
-        for (int i = 0; i < size; i++) {
+        //neighbours search phase
+        findNeighboursTI();
+        //deprecated
+        /*for (int i = 0; i < size; i++) {
             neighbours[i] = TI_findNeighbours(i);
-            points_sorted[i].noOfNeighbours = neighbours[i].size() + 1;
-        }
+            points_sorted[i].noOfNeighbours = neighbours[i].size()+1;
+        }*/
         end = chrono::high_resolution_clock::now();
         double findneighbours_time = chrono::duration_cast<chrono::microseconds>(end - start).count();
         cout << "Find neighbours time: " << findneighbours_time << endl;
+        //printNb();
         auto cstart = chrono::high_resolution_clock::now();
         for (int i = 0; i < size; i++) {
-            if (points_sorted[i].clusterNo != NOT_CLASSIFIED) {
 
-                continue;
-            }
-            //check if new cluster should be created
+            if (points_sorted[i].clusterNo != NOT_CLASSIFIED) continue;
+
             if (isCore(i)) {
                 points_sorted[i].type = 1;
-                clusterInx++;
-                TI_formCluster(i, clusterInx);
+                ++clusterInx;
+                points_sorted[i].clusterNo = clusterInx;
+                points_sorted[i].visited = 1;
+                for (int n = 0; n < neighbours[i].size(); n++) {
+                    points_sorted[neighbours[i][n]].visited = 1;
+                }
+                //search among neighbors
+                for (int j = 0; j < neighbours[i].size(); j++) {
+                    int cur_n = neighbours[i][j];
+
+                    if (points_sorted[cur_n].clusterNo == NOISE) { points_sorted[cur_n].clusterNo = clusterInx; points_sorted[cur_n].visited = 1; points_sorted[cur_n].type = 0; }
+                    if (points_sorted[cur_n].clusterNo != NOT_CLASSIFIED) { continue; }
+                    points_sorted[cur_n].clusterNo = clusterInx;
+                    points_sorted[cur_n].visited = 1;
+                    if (isCore(cur_n)) {
+                        points_sorted[cur_n].type = 1;
+                        for (int k = 0; k < neighbours[cur_n].size(); k++)
+                        {
+                            int cand_idx = neighbours[cur_n][k];
+                            if (points_sorted[cand_idx].clusterNo == NOISE) { points_sorted[cand_idx].clusterNo = clusterInx; }
+                            if (points_sorted[cand_idx].clusterNo == NOT_CLASSIFIED) {
+                                if (points_sorted[cand_idx].visited == 0)
+                                {
+                                    neighbours[i].push_back(neighbours[cur_n][k]);
+                                    points_sorted[cand_idx].visited = 1;
+                                }
+                            }
+                        }
+                    }
+                }
             }
-            //noise*/
+            //noise
             else {
                 points_sorted[i].clusterNo = NOISE;
                 points_sorted[i].type = -1;
@@ -125,7 +156,7 @@ public:
         end = chrono::high_resolution_clock::now();
         double write_time = chrono::duration_cast<chrono::microseconds>(end - start).count();
         cout << "Write to file time=" << write_time << endl;
-        // printNb();
+
     }
     //
     //output results to file
@@ -157,7 +188,7 @@ public:
     }
 
     void printNb() {
-        ofstream output("neighbours");
+        ofstream output("TI-neighbours");
         for (int i = 0; i < size; i++) {
             output << i << " " << points_sorted[i].index << endl;
             for (size_t j = 0; j < neighbours[i].size(); j++) {
@@ -167,23 +198,44 @@ public:
             output << endl;
         }
     }
-    // function assigning point to clusters - will be updated to iterative in the next revision
-    void TI_formCluster(int now, int c) {
-        points_sorted[now].clusterNo = c;
-        if (!isCore(now))
-        {
-            if (isBorder(now)) { points_sorted[now].type = 0; }
-            return;
-        }
-        else { points_sorted[now].type = 1; }
 
-        for (int i = 0; i < (int)neighbours[now].size(); i++) {
-            int next = neighbours[now][i];
-            if (points_sorted[next].clusterNo != NOT_CLASSIFIED && points_sorted[next].clusterNo != NOISE) { continue; }
-            TI_formCluster(next, c);
+
+    //alternative findneighbours function
+        //find neighbourhood for all points
+    void findNeighboursTI() {
+
+        for (int i = 0; i < size; i++) {
+            double threshold = eps + points_sorted[i].distance;
+            for (int j = i + 1; j < size; j++) {
+                //if within epsilon radius
+                if (points_sorted[j].distance > threshold) {
+                    break;
+                }
+                double dist = points_sorted[i].getDistanceN(points_sorted[j], dimensions);
+
+                //points_sorted[j].noDistances++;
+                points_sorted[i].noDistances++;
+                if (dist <= eps) {
+                    points_sorted[i].noOfNeighbours++;
+                    //push to neighbourhood
+                    neighbours[i].push_back(j);
+
+                    // increment neighbour count
+                    points_sorted[j].noOfNeighbours++;
+                    neighbours[j].push_back(i);
+                }
+            }
+
+            // add self
+            //points_sorted[i].noOfNeighbours++;
+           // assert(points_sorted[i].noOfNeighbours == neighbours[i].size() + 1);
+
+            points_sorted[i].noOfNeighbours = neighbours[i].size() + 1;
+
+
         }
     }
-    //find neighbourhood of a point with index e
+    //find neighbourhood of a point with index e -DEPRECATED
     vector<int> TI_findNeighbours(int e) {
         vector<int> fwdNeighbourhood = TI_fwdNeighbourhood(e);
         vector<int> neighbourhood = TI_bwNeighbourhood(e);
@@ -191,6 +243,7 @@ public:
 
         return  neighbourhood;
     }
+    //forward neighbourhood -DEPRECATED
     vector<int> TI_fwdNeighbourhood(int e) {
         std::vector<int>fw;
         double threshold = eps + points_sorted[e].distance;
@@ -212,6 +265,7 @@ public:
 
         return fw;
     }
+    //backward neighbourhood -DEPRECATED
     vector<int> TI_bwNeighbourhood(int e) {
         ///backward neighbourhood
         vector<int>bw;
@@ -294,6 +348,7 @@ int main(int argc, char* argv[])
     std::string path = argv[1];
     //std::string path = "simple";
     InputReader input = InputReader(path);
+    cout << path << endl;
     auto wend = chrono::high_resolution_clock::now();
     auto read_time = chrono::duration_cast<chrono::microseconds>(wend - tstart).count();
     cout << "Read time: " << read_time << " microseconds" << endl;
