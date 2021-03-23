@@ -1,6 +1,6 @@
 # (TI-)DBSCAN
 
-Simple implementation of the DBSCAN clustering algorithm in c++ language including the original version and an improved one using triangular inequality feture reducing number of distance computations.
+Simple implementation of the DBSCAN clustering algorithm in c++ language including the original version and an improved one using triangular inequality feature reducing number of distance computations.
 
 ## References
 <a id="1">[1]</a> 
